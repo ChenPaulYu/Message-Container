@@ -23,6 +23,8 @@ screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
 app = Flask(__name__)
 port = "/dev/ttyACM0"
 
+global player
+
 try: 
     serialFromArduino = serial.Serial(port,9600)
 except:
@@ -77,8 +79,8 @@ def text():
 @app.route("/message",methods=['POST'])
 def message():
     if request.json:
-        message_trigger = request.json['message_trigger']
-        communicateWithArduino(message_trigger)
+        message = request.json['message']
+        communicateWithArduino(message)
         return jsonify({'success':True})
     return jsonify({'success':False})
 
@@ -86,7 +88,8 @@ def message():
 def video():
     if request.json:
         url = request.json['url']
-        playYoutube(url)
+        video_url = playYoutube(url)
+        player = OMXPlayer(video_url)
         return jsonify({'success':True})
     return jsonify({'success':False})
 
@@ -106,8 +109,7 @@ def playYoutube(url):
         else:
             video = result
     video_url = video['formats'][-1]['url']
-    global player
-    player = OMXPlayer(video_url)
+    return video_url
 
 def communicateWithArduino(message_trigger):
     if serialFromArduino == None:
@@ -215,35 +217,82 @@ def backgroundDsiplay():
         pygame.display.flip()
 
 
-# def get_data(*args):
-#     socketIO.emit('res',args[0]["message"])
-#     print(args[0]["message"])
+def get_data(*args):
+    socketIO.emit('res',args[0]["message"])
+    print(args[0]["message"])
 
-# def video_socket(*args):
-#     url = args[0]["url"]
-#     print("url:",url)
-#     playYoutube(url)
-#     socketIO.emit('video',jsonify({'success':True}))
+def video_socket(*args):
+    try:
+        url = args[0]["url"]
+        print("url:",url)
+        video_url = playYoutube(url)
+        global player
+        player = OMXPlayer(video_url)
+        socketIO.emit('video',{'success':True})
+    except:
+        socketIO.emit('video',{'success':False})
 
-# def message_socket(*args):
-#     socketIO.emit('res',args[0]["message"])
-#     # print(args[0]["message"])
 
-# def music_socket(*args):
-#     # socketIO.emit('res',args[0]["message"])
-#     # print(args[0]["message"])
+def message_socket(*args):
+    try:
+        message = args[0]["message"]
+        print(message)
+        # communicateWithArduino(message_trigger)
+        socketIO.emit('message',{'success':True})
+    except:
+        socketIO.emit('message',{'success':False})
 
-# def image_socket(*args):
-#     # socketIO.emit('res',args[0]["message"])
-#     # print(args[0]["message"])
+def music_socket(*args):
+    try:
+        url = args[0]["url"]
+        r = requests.get(url)
+        print("url:",url)
+        with open('./music/movie.mp3', 'wb') as f:
+            f.write(r.content)
+            global player
+            player = OMXPlayer('./music/movie.mp3')
+            socketIO.emit('music',{'success':True})
+    except:
+        socketIO.emit('music',{'success':False})
 
-# def background_socket(*args):
-#     # socketIO.emit('res',args[0]["message"])
-#     # print(args[0]["message"])
 
-# def text_socket(*args):
-#     # socketIO.emit('res',args[0]["message"])
-#     # print(args[0]["message"])
+def image_socket(*args):
+    try:
+        url = args[0]["url"]
+        r = requests.get(url)
+        with open('./image/img01.jpg', 'wb') as f:
+            f.write(r.content)
+            event = pygame.event.Event(pygame.USEREVENT, {'data': 'image'})
+            pygame.event.post(event)
+            socketIO.emit('image',{'success':True}) 
+    except:
+        socketIO.emit('music',{'success':False})
+
+def background_socket(*args):
+    try:
+        event = pygame.event.Event(pygame.USEREVENT, {'data': 'background'})
+        pygame.event.post(event)
+        socketIO.emit('background',{'success':True}) 
+    except:
+        socketIO.emit('music',{'success':False})
+
+
+def text_socket(*args):
+    try:
+        global text 
+        text = args[0]["text"]
+        event = pygame.event.Event(pygame.USEREVENT, {'data': 'text'})
+        pygame.event.post(event)
+        socketIO.emit('text',{'success':True})
+    except:
+        socketIO.emit('music',{'success':False})
+
+def quit_socket(*args):
+    try:
+        player.quit()
+        socketIO.emit('quit',{'success':True})
+    except:
+        socketIO.emit('music',{'success':False})
 
 
 def serverStart():
@@ -265,9 +314,6 @@ def socketStart():
     socketIO = SocketIO( target_url, 3000, LoggingNamespace)
     print('Started')
 
-    socketIO.emit('test','test')
-    socketIO.on('test', get_data)
-
     socketIO.on('video', video_socket)
     socketIO.on('quit', quit_socket)
     socketIO.on('message', message_socket)
@@ -282,9 +328,9 @@ def socketStart():
 
 if __name__ == "__main__":
     
-    thread_server = threading.Thread(target=serverStart)
-    thread_server.daemon = True
-    thread_server.start()
+    # thread_server = threading.Thread(target=serverStart)
+    # thread_server.daemon = True
+    # thread_server.start()
 
     # thread_read   = threading.Thread(target=readData)
     # thread_read.daemon = True
@@ -294,9 +340,9 @@ if __name__ == "__main__":
     thread_backgroud.daemon = True
     thread_backgroud.start()
     
-    # thread_socket = threading.Thread(target=socketStart)
-    # thread_socket.daemon = True
-    # thread_socket.start()
+    thread_socket = threading.Thread(target=socketStart)
+    thread_socket.daemon = True
+    thread_socket.start()
 
     while True:
         time.sleep(1)

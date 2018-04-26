@@ -2,7 +2,7 @@ from flask import Flask,jsonify
 from flask import request
 from flask import send_file, send_from_directory
 import youtube_dl
-import time
+import time,random
 import os
 import signal,psutil
 import pygame, sys
@@ -33,7 +33,6 @@ except:
 def hello():
     return "Hello World!"
 
-
 @app.route("/music", methods=['POST'])
 def music():
     if request.json:
@@ -45,8 +44,6 @@ def music():
             player = OMXPlayer('./music/movie.mp3')
         return jsonify({'success':True})
     return jsonify({'success':False})
-
-
 
 @app.route("/background", methods=['POST'])
 def background():
@@ -77,7 +74,6 @@ def text():
         return jsonify({'success':True})
     return jsonify({'success':False})
     
-
 @app.route("/message",methods=['POST'])
 def message():
     if request.json:
@@ -99,16 +95,6 @@ def video():
 def quit():
     player.quit()
     return jsonify({'success':True})
-
-def video_socket(*args):
-    url = args[0]["url"]
-    print("url:",url)
-    playYoutube(url)
-    socketIO.emit('video',jsonify({'success':True}))
-
-def get_data(*args):
-    socketIO.emit('res',args[0]["message"])
-    print(args[0]["message"])
 
 
 def playYoutube(url):
@@ -175,10 +161,8 @@ def backgroundDsiplay():
                 tmp = event.data
                 if(tmp == "image"):
                     print('image')
-
                     last_state_change = time.time()
                     state = True
-
                     image = pygame.image.load('./image/img01.jpg')
                     size = image.get_rect()
                     picture_rect = image.get_rect(center = screen.get_rect().center)
@@ -230,6 +214,38 @@ def backgroundDsiplay():
             screen.blit(display,position)
         pygame.display.flip()
 
+
+# def get_data(*args):
+#     socketIO.emit('res',args[0]["message"])
+#     print(args[0]["message"])
+
+# def video_socket(*args):
+#     url = args[0]["url"]
+#     print("url:",url)
+#     playYoutube(url)
+#     socketIO.emit('video',jsonify({'success':True}))
+
+# def message_socket(*args):
+#     socketIO.emit('res',args[0]["message"])
+#     # print(args[0]["message"])
+
+# def music_socket(*args):
+#     # socketIO.emit('res',args[0]["message"])
+#     # print(args[0]["message"])
+
+# def image_socket(*args):
+#     # socketIO.emit('res',args[0]["message"])
+#     # print(args[0]["message"])
+
+# def background_socket(*args):
+#     # socketIO.emit('res',args[0]["message"])
+#     # print(args[0]["message"])
+
+# def text_socket(*args):
+#     # socketIO.emit('res',args[0]["message"])
+#     # print(args[0]["message"])
+
+
 def serverStart():
     app.run(host='0.0.0.0', port=8080,threaded=True)
 
@@ -239,19 +255,29 @@ def showText(tmp,fontsize):
     color = pygame.Color(48, 48, 48)
     Text = font.render(tmp, True, color)
     Rect = Text.get_rect()
-    # Rect.midtop = (100, 100)
     print(Rect)
     return Text,Rect
 
 
 def socketStart():
     global socketIO
-    socketIO = SocketIO('192.168.31.123', 3000, LoggingNamespace)
+    target_url = '192.168.31.123'
+    socketIO = SocketIO( target_url, 3000, LoggingNamespace)
     print('Started')
+
     socketIO.emit('test','test')
     socketIO.on('test', get_data)
+
     socketIO.on('video', video_socket)
+    socketIO.on('quit', quit_socket)
+    socketIO.on('message', message_socket)
+    socketIO.on('music', music_socket)
+    socketIO.on('image', image_socket)
+    socketIO.on('background', background_socket)
+    socketIO.on('text', text_socket)
+
     socketIO.wait()
+
 
 
 if __name__ == "__main__":
